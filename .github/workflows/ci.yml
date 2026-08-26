@@ -58,3 +58,63 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/reading-material-library:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/reading-material-library:latest
+
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: docker
+
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Deploy application to EC2
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          port: 22
+
+          script: |
+            set -e
+
+            cd ~/reading-material-library
+
+            export IMAGE_TAG="${{ github.sha }}"
+
+            echo "Deploying image:"
+            echo "${{ secrets.DOCKERHUB_USERNAME }}/reading-material-library:${IMAGE_TAG}"
+
+            echo "Pulling application image..."
+            docker compose pull application
+
+            echo "Starting updated application..."
+            docker compose up -d application
+
+            echo "Waiting for application health..."
+
+            for i in {1..30}; do
+              STATUS=$(docker inspect \
+                --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+                reading-material-library 2>/dev/null || true)
+
+              echo "Attempt $i/30 - Application status: $STATUS"
+
+              if [ "$STATUS" = "healthy" ]; then
+                echo "Application is healthy."
+                echo "Deployment successful."
+                exit 0
+              fi
+
+              sleep 5
+            done
+
+            echo "Application failed health check."
+
+            echo "Container status:"
+            docker compose ps
+
+            echo "Application logs:"
+            docker compose logs --tail=100 application
+
+            exit 1

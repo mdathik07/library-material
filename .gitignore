@@ -46,3 +46,6 @@ build/
 
 # Logs
 *.log
+# GitHub Actions EC2 deployment SSH keys
+reading-library-deploy
+reading-library-deploy.pub
