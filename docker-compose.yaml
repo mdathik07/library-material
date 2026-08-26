@@ -1,0 +1,59 @@
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: reading-library-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: reading_library
+      POSTGRES_USER: reading_library
+      POSTGRES_PASSWORD: reading_library
+      TZ: UTC
+      PGTZ: UTC
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - reading-library-postgres-data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reading_library -d reading_library"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+
+  reading-material-library:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: reading-material-library
+
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/reading_library?options=-c%20TimeZone=UTC"
+      SPRING_DATASOURCE_USERNAME: reading_library
+      SPRING_DATASOURCE_PASSWORD: reading_library
+
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_JPA_OPEN_IN_VIEW: "false"
+      SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE: UTC
+
+      SPRING_FLYWAY_ENABLED: "true"
+
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=UTC"
+
+    ports:
+      - "8080:8080"
+
+
+volumes:
+  reading-library-postgres-data:
